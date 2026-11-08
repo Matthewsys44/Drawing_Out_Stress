@@ -1,0 +1,82 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Neon Quad Drawing Pad</title><style>
+body{margin:0;padding:0;background:#000;color:#fff;font-family:sans-serif;overflow:hidden;display:flex;flex-direction:column;height:100vh;user-select:none;-webkit-user-select:none;}
+hdr{text-align:center;padding:10px 0;background:rgba(10,10,10,0.9);border-bottom:1px solid #111;z-index:10;}
+.w-txt{color:#FFD700;font-size:20px;font-weight:bold;text-shadow:0 0 10px #FFD700;margin:0;}
+p{margin:4px 0 0 0;font-size:12px;color:#aaa;}
+#canvas-container{flex:1;position:relative;background:#000;}
+canvas{display:block;width:100%;height:100%;touch-action:none;}
+.toolbar{background:rgba(15,15,15,0.95);border-top:1px solid #222;padding:12px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box;z-index:10;}
+.row{display:flex;justify-content:space-around;align-items:center;gap:10px;}
+.control-group{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:bold;color:#ccc;}
+input[type="range"]{width:80px;accent-color:#FFD700;}
+.btn{background:#222;color:#fff;border:1px solid #444;padding:8px 14px;font-weight:bold;font-size:13px;border-radius:6px;cursor:pointer;}
+.clear-btn{background:#500;border-color:#800;}
+.palette{display:flex;gap:10px;overflow-x:auto;padding:4px;justify-content:center;width:100%;}
+.dot{width:32px;height:32px;border-radius:50%;cursor:pointer;border:2px solid transparent;box-sizing:border-box;transition:transform 0.1s;}
+.dot.active{border-color:#fff;transform:scale(1.25);}
+</style></head><body>
+<hdr><div class="w-txt">Welcome To The Kaleidoscope Drawing Pad</div><p>Drawing multiplies across 4 independent glowing canvas regions simultaneously!</p></hdr>
+<div id="canvas-container"><canvas id="paintCanvas"></canvas></div>
+<div class="toolbar">
+    <div class="row">
+        <div class="control-group"><label>Slices:</label><input type="range" id="slices" min="4" max="36" value="12" step="2" onchange="document.getElementById('sVal').innerText=this.value"><span id="sVal" style="color:#FFD700;width:16px;">12</span></div>
+        <div class="control-group"><label>Size:</label><input type="range" id="size" min="2" max="25" value="6"></div>
+        <button class="btn clear-btn" onclick="clearCanvas()">🗑️ Clear All</button>
+    </div>
+    <div class="row"><div class="palette" id="palette"></div></div>
+</div>
+<script>
+const canvas=document.getElementById('paintCanvas'),ctx=canvas.getContext('2d'),container=document.getElementById('canvas-container');
+let isDrawing=false,lastX=0,lastY=0,curColor='#00FFFF';
+const neonColors=['#00FFFF','#FF00FF','#00FF00','#FFD700','#FF3333','#33FFF6','#9D33FF','#FF55BB','#FFFFFF'];
+function resizeCanvas(){canvas.width=container.clientWidth;canvas.height=container.clientHeight;clearCanvas();}
+function setupPalette(){
+    const p=document.getElementById('palette');
+    neonColors.forEach((c,i)=>{
+        const d=document.createElement('div');d.className='dot';d.style.backgroundColor=c;d.style.boxShadow=`0 0 12px ${c}`;
+        if(i===0)d.classList.add('active');
+        d.addEventListener('click',()=>{document.querySelectorAll('.dot').forEach(el=>el.classList.remove('active'));d.classList.add('active');curColor=c;});
+        p.appendChild(d);
+    });
+}
+function clearCanvas(){
+    ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='#222';ctx.lineWidth=1;ctx.beginPath();
+    ctx.moveTo(canvas.width/2,0);ctx.lineTo(canvas.width/2,canvas.height);
+    ctx.moveTo(0,canvas.height/2);ctx.lineTo(canvas.width,canvas.height/2);ctx.stroke();
+    ctx.lineCap='round';ctx.lineJoin='round';
+}
+function drawSection(x1,y1,x2,y2,cx,cy){
+    const slices=parseInt(document.getElementById('slices').value),bSize=parseInt(document.getElementById('size').value),step=(Math.PI*2)/slices;
+    const sx=x1-cx,sy=y1-cy,ex=x2-cx,ey=y2-cy;
+    ctx.save();ctx.translate(cx,cy);ctx.lineWidth=bSize;ctx.strokeStyle=curColor;ctx.shadowBlur=bSize*2.2;ctx.shadowColor=curColor;
+    for(let i=0;i<slices;i++){
+        ctx.rotate(step);
+        ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(sx,-sy);ctx.lineTo(ex,-ey);ctx.stroke();
+    }
+    ctx.restore();
+}
+function drawQuad(x1,y1,x2,y2){
+    const w=canvas.width,h=canvas.height,qW=w/2,qH=h/2;
+    let localX1=x1,localY1=y1,localX2=x2,localY2=y2;
+    if(x1>qW){localX1-=qW;localX2-=qW;}
+    if(y1>qH){localY1-=qH;localY2-=qH;}
+    drawSection(localX1,localY1,localX2,localY2,qW/2,qH/2);
+    drawSection(localX1+qW,localY1,localX2+qW,localY2,qW+qW/2,qH/2);
+    drawSection(localX1,localY1+qH,localX2,localY2+qH,qW/2,qH+qH/2);
+    drawSection(localX1+qW,localY1+qH,localX2+qW,localY2+qH,qW+qW/2,qH+qH/2);
+}
+function getPos(e){
+    const rect=canvas.getBoundingClientRect();
+    if(e.touches&&e.touches.length>0)return{x:e.touches[0].clientX-rect.left,y:e.touches[0].clientY-rect.top};
+    return{x:e.offsetX,y:e.offsetY};
+}
+function start(e){isDrawing=true;const p=getPos(e);lastX=p.x;lastY=p.y;}
+function move(e){if(!isDrawing)return;e.preventDefault();const p=getPos(e);drawQuad(lastX,lastY,p.x,p.y);lastX=p.x;lastY=p.y;}
+function stop(){isDrawing=false;}
+canvas.addEventListener('mousedown',start);canvas.addEventListener('mousemove',move);window.addEventListener('mouseup',stop);
+canvas.addEventListener('touchstart',start,{passive:false});canvas.addEventListener('touchmove',move,{passive:false});window.addEventListener('touchend',stop);
+window.addEventListener('resize',resizeCanvas);setupPalette();setTimeout(resizeCanvas,100);
+</script></body></html>
